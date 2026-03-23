@@ -1,0 +1,10 @@
+# Wyoming Protocol dependencies
+wyoming>=1.0.0
+zeroconf>=0.131.0
+ifaddr>=0.1.7
+
+# Existing dependencies (if not already installed)
+piper-tts>=1.0.0
+numpy>=1.20.0
+soundfile>=0.12.0
+

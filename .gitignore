@@ -1,1 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+house-model-py312/
 house-model/
+
+# OS / editor
+.DS_Store
+
+# Piper voice weights (large binaries; Docker seeds from local build context or use Piper UI)
+tts_service/models/*.onnx
+
+# Voice trainer: local media, venvs, and generated data
+voice_trainer/venv/
+voice_trainer/training/train_venv/
+voice_trainer/training/dataset/
+voice_trainer/training/piper/
+voice_trainer/input/
+voice_trainer/dataset/
+voice_trainer/output/
+voice_trainer/**/*.zip
+
+# Local experiments / large checkpoints
+SpongebobSquarePantsV2*/
+wakeword_training/

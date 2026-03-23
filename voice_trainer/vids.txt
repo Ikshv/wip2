@@ -1,0 +1,10 @@
+https://www.youtube.com/watch?v=9zI05Yr38BQ&list=PLT7YQtwNLtQ0IcF_KllcmbOktjY4wxu9x
+python process.py "https://www.youtube.com/watch?v=9zI05Yr38BQ&list=PLT7YQtwNLtQ0IcF_KllcmbOktjY4wxu9x" --name "goku_fighterZ"
+https://www.youtube.com/watch?v=THH7hh9TRnY&list=PLT7YQtwNLtQ0IcF_KllcmbOktjY4wxu9x&index=3
+python process.py "https://www.youtube.com/watch?v=THH7hh9TRnY&list=PLT7YQtwNLtQ0IcF_KllcmbOktjY4wxu9x&index=3" --name "goku_base_fighterZ"
+https://www.youtube.com/watch?v=0tVgI2_S_oA&list=PLT7YQtwNLtQ0IcF_KllcmbOktjY4wxu9x&index=3
+https://www.youtube.com/watch?v=PUJl_u_-iB4&list=PLT7YQtwNLtQ0IcF_KllcmbOktjY4wxu9x&index=4
+https://www.youtube.com/watch?v=amASzspUC1Y&list=PLT7YQtwNLtQ0IcF_KllcmbOktjY4wxu9x&index=11
+
+
+python process.py "" --name ""

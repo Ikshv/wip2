@@ -3,7 +3,7 @@ import os, json, requests
 from pathlib import Path
 from typing import Optional
 
-BASE   = os.getenv("OLLAMA_BASE", "http://localhost:11434")
+BASE   = os.getenv("OLLAMA_BASE", "http://10.229.64.118:11434")
 MODEL  = os.getenv("MARA_MODEL", "llama2-uncensored:latest")
 
 # at top of llm.py

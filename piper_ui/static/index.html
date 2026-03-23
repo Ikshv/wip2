@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Piper models</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="header">
+    <div>
+      <h1>Piper voices</h1>
+      <p class="sub">Models live on the shared Docker volume with the TTS service. Upload a <code>.onnx</code> and matching <code>.onnx.json</code> (same basename).</p>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="card" aria-labelledby="upload-title">
+      <h2 id="upload-title">Upload</h2>
+      <form id="upload-form" class="form">
+        <label class="field">
+          <span>ONNX model</span>
+          <input type="file" name="onnx" accept=".onnx" required />
+        </label>
+        <label class="field">
+          <span>JSON config (<span class="mono">name.onnx.json</span>)</span>
+          <input type="file" name="config_json" accept=".json,application/json" required />
+        </label>
+        <button type="submit" class="btn primary">Upload</button>
+      </form>
+      <p id="msg" class="msg" role="status"></p>
+    </section>
+
+    <section class="card" aria-labelledby="list-title">
+      <div class="row">
+        <h2 id="list-title">Installed</h2>
+        <button type="button" id="refresh" class="btn">Refresh</button>
+      </div>
+      <p class="path" id="models-dir"></p>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Short name</th>
+              <th>Files</th>
+              <th>Size</th>
+              <th>Updated (UTC)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p id="empty" class="empty hidden">No complete voice pairs yet (each needs <code>.onnx</code> + <code>.onnx.json</code>).</p>
+    </section>
+  </main>
+
+  <script>
+    const rows = document.getElementById('rows');
+    const empty = document.getElementById('empty');
+    const msg = document.getElementById('msg');
+    const modelsDir = document.getElementById('models-dir');
+
+    function fmtBytes(n) {
+      if (n < 1024) return n + ' B';
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+      return (n / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function setMsg(text, kind) {
+      msg.textContent = text || '';
+      msg.className = 'msg' + (kind ? ' ' + kind : '');
+    }
+
+    async function load() {
+      setMsg('');
+      const r = await fetch('/api/models');
+      if (!r.ok) {
+        setMsg('Failed to load models', 'err');
+        return;
+      }
+      const data = await r.json();
+      modelsDir.textContent = data.models_dir || '';
+      const list = data.models || [];
+      rows.innerHTML = '';
+      if (!list.length) {
+        empty.classList.remove('hidden');
+        return;
+      }
+      empty.classList.add('hidden');
+      for (const m of list) {
+        const tr = document.createElement('tr');
+        const total = (m.onnx_bytes || 0) + (m.json_bytes || 0);
+        tr.innerHTML = `
+          <td><span class="pill">${escapeHtml(m.short_name)}</span></td>
+          <td class="mono small">${escapeHtml(m.onnx)}<br/>${escapeHtml(m.json)}</td>
+          <td>${fmtBytes(total)}</td>
+          <td class="small">${escapeHtml((m.modified || '').replace('T', ' ').replace('+00:00', ''))}</td>
+          <td><button type="button" class="btn danger btn-del" data-id="${escapeAttr(m.id)}">Remove</button></td>
+        `;
+        rows.appendChild(tr);
+      }
+      rows.querySelectorAll('.btn-del').forEach((btn) => {
+        btn.addEventListener('click', () => remove(btn.getAttribute('data-id')));
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+    function escapeAttr(s) {
+      return escapeHtml(s).replace(/'/g, '&#39;');
+    }
+
+    async function remove(id) {
+      if (!id || !confirm('Remove this voice from disk?')) return;
+      setMsg('Removing…');
+      const r = await fetch('/api/models/' + encodeURIComponent(id), { method: 'DELETE' });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setMsg(j.detail || 'Delete failed', 'err');
+        return;
+      }
+      setMsg('Removed ' + id, 'ok');
+      await load();
+    }
+
+    document.getElementById('refresh').addEventListener('click', load);
+
+    document.getElementById('upload-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      setMsg('Uploading…');
+      const r = await fetch('/api/models/upload', { method: 'POST', body: fd });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const d = j.detail;
+        const text = Array.isArray(d) ? d.map((x) => x.msg || x).join(' ') : (d || 'Upload failed');
+        setMsg(text, 'err');
+        return;
+      }
+      setMsg('Uploaded ' + (j.id || '') + '. TTS will pick it up on the next describe/synthesize.', 'ok');
+      e.target.reset();
+      await load();
+    });
+
+    load();
+  </script>
+</body>
+</html>

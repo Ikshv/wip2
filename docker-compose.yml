@@ -1,0 +1,64 @@
+# Services are independent: no depends_on. Start only what you need, e.g.:
+#   docker compose up -d piper-ui
+#   docker compose stop mara-tts
+# Stopping one service does not stop the others.
+
+services:
+  mara-tts:
+    build:
+      context: ./tts_service
+      dockerfile: Dockerfile
+    ports:
+      - "10200:10200"
+    volumes:
+      - piper_models:/data/models
+    environment:
+      MODELS_DIR: /data/models
+      WYOMING_HOST: "0.0.0.0"
+      WYOMING_PORT: "10200"
+      # Short name matching discover_voices (first segment of en_US-name-quality.onnx)
+      PIPER_VOICE: ${PIPER_VOICE:-patrick}
+    restart: unless-stopped
+
+  mara-wakeword:
+    build:
+      context: ./wakeword_service
+      dockerfile: Dockerfile
+    ports:
+      - "10300:10300"
+    volumes:
+      - wakeword_models:/data/wakeword_models
+    environment:
+      WAKE_MODELS_DIR: /data/wakeword_models
+      WAKE_WORDS: ${WAKE_WORDS:-patrick}
+      # Docker image uses faster-whisper (no tflite); use openwakeword on host if needed
+      WAKE_DETECTION_METHOD: ${WAKE_DETECTION_METHOD:-whisper}
+    restart: unless-stopped
+
+  piper-ui:
+    build:
+      context: ./piper_ui
+      dockerfile: Dockerfile
+    ports:
+      - "${PIPER_UI_PORT:-8080}:8080"
+    volumes:
+      - piper_models:/data/models
+    environment:
+      MODELS_DIR: /data/models
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  piper_models:
+  wakeword_models:

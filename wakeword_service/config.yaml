@@ -1,0 +1,40 @@
+# Mara Wake Word Service Configuration
+
+# Server settings
+server:
+  host: "0.0.0.0"
+  port: 10300
+
+# Wake word detection settings
+detection:
+  # Detection method: "openwakeword" or "whisper"
+  method: "openwakeword"
+  
+  # Detection threshold (0.0 - 1.0)
+  # Lower = more sensitive (more false positives)
+  # Higher = less sensitive (may miss detections)
+  # Recommended: 0.3 - 0.5 for custom models
+  threshold: 0.3
+  
+  # Cooldown between detections in seconds
+  # Prevents multiple triggers for the same utterance
+  cooldown_seconds: 2.0
+
+# Wake words to detect
+# These names are advertised to Home Assistant
+# Each should have a corresponding .onnx model in the models directory
+wake_words:
+  - "patrick"
+  # - "hey homey"
+  # - "evil house"
+
+# Models directory (relative to this config file, or absolute path)
+models_dir: "./models"
+
+# Debug settings
+debug:
+  # Print detection scores even when below threshold
+  log_all_scores: false
+  
+  # Minimum score to log (only if log_all_scores is true)
+  min_score_to_log: 0.1

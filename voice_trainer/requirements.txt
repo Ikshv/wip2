@@ -1,0 +1,12 @@
+# YouTube download
+yt-dlp>=2024.1.0
+
+# Audio processing
+pydub>=0.25.1
+ffmpeg-python>=0.2.0
+
+# Transcription (using faster-whisper for speed)
+faster-whisper>=1.0.0
+
+# Utilities
+tqdm>=4.66.0

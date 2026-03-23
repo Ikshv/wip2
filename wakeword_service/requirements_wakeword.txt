@@ -1,0 +1,19 @@
+# Wyoming Protocol dependencies
+wyoming>=1.0.0
+zeroconf>=0.131.0
+ifaddr>=0.1.7
+
+# Wake word detection dependencies
+# Option 1: openWakeWord (recommended for better performance)
+openwakeword>=0.5.0
+
+# Option 2: Whisper-based detection (fallback)
+# faster-whisper>=1.0.0
+
+# Audio processing
+numpy>=1.20.0
+
+# Configuration
+PyYAML>=6.0
+
+

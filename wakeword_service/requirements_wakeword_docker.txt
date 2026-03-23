@@ -1,0 +1,8 @@
+# Docker image: openWakeWord pulls tflite-runtime on Linux, which often fails on arm64.
+# This stack uses faster-whisper instead (set WAKE_DETECTION_METHOD=whisper).
+wyoming>=1.0.0
+zeroconf>=0.131.0
+ifaddr>=0.1.7
+numpy>=1.20.0
+PyYAML>=6.0
+faster-whisper>=1.0.0

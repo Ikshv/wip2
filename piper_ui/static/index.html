@@ -3,20 +3,22 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Piper models</title>
+  <title>Mara voice dashboard</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
   <header class="header">
     <div>
-      <h1>Piper voices</h1>
-      <p class="sub">Models live on the shared Docker volume with the TTS service. Upload a <code>.onnx</code> and matching <code>.onnx.json</code> (same basename).</p>
+      <h1>Mara voice dashboard</h1>
+      <p class="sub">Piper TTS voices and OpenWakeWord ONNX models share the same Docker volumes as <code>mara-tts</code> and <code>mara-wakeword</code>. Live log tails <code>mara-wakeword</code> when logging to the shared file.</p>
     </div>
   </header>
 
-  <main class="main">
-    <section class="card" aria-labelledby="upload-title">
-      <h2 id="upload-title">Upload</h2>
+  <main class="dashboard">
+    <section class="panel card" aria-labelledby="piper-title">
+      <h2 id="piper-title" class="panel-title">Piper TTS voices</h2>
+      <p class="panel-hint">Upload <code>.onnx</code> + matching <code>.onnx.json</code> (same basename).</p>
+
       <form id="upload-form" class="form">
         <label class="field">
           <span>ONNX model</span>
@@ -26,15 +28,13 @@
           <span>JSON config (<span class="mono">name.onnx.json</span>)</span>
           <input type="file" name="config_json" accept=".json,application/json" required />
         </label>
-        <button type="submit" class="btn primary">Upload</button>
+        <button type="submit" class="btn primary">Upload voice</button>
       </form>
-      <p id="msg" class="msg" role="status"></p>
-    </section>
+      <p id="msg-piper" class="msg" role="status"></p>
 
-    <section class="card" aria-labelledby="list-title">
       <div class="row">
-        <h2 id="list-title">Installed</h2>
-        <button type="button" id="refresh" class="btn">Refresh</button>
+        <h3 class="subhead">Installed</h3>
+        <button type="button" id="refresh-piper" class="btn">Refresh</button>
       </div>
       <p class="path" id="models-dir"></p>
       <div class="table-wrap">
@@ -44,22 +44,83 @@
               <th>Short name</th>
               <th>Files</th>
               <th>Size</th>
-              <th>Updated (UTC)</th>
+              <th>Updated</th>
               <th></th>
             </tr>
           </thead>
-          <tbody id="rows"></tbody>
+          <tbody id="rows-piper"></tbody>
         </table>
       </div>
-      <p id="empty" class="empty hidden">No complete voice pairs yet (each needs <code>.onnx</code> + <code>.onnx.json</code>).</p>
+      <p id="empty-piper" class="empty hidden">No complete voice pairs (<code>.onnx</code> + <code>.onnx.json</code>).</p>
+    </section>
+
+    <section class="panel card" aria-labelledby="wake-title">
+      <h2 id="wake-title" class="panel-title">OpenWakeWord models</h2>
+      <p class="panel-hint">Custom wake word <code>.onnx</code> only (one file). Restart or reload <code>mara-wakeword</code> after changes. Phrase in HA usually matches the filename stem (e.g. <code>patrick.onnx</code> → patrick).</p>
+
+      <form id="wake-upload-form" class="form">
+        <label class="field">
+          <span>Wake ONNX</span>
+          <input type="file" name="onnx" accept=".onnx" required />
+        </label>
+        <button type="submit" class="btn primary">Upload wake model</button>
+      </form>
+      <p id="msg-wake" class="msg" role="status"></p>
+
+      <div class="row">
+        <h3 class="subhead">Installed</h3>
+        <button type="button" id="refresh-wake" class="btn">Refresh</button>
+      </div>
+      <p class="path" id="wake-models-dir"></p>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Phrase hint</th>
+              <th>File</th>
+              <th>Size</th>
+              <th>Updated</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="rows-wake"></tbody>
+        </table>
+      </div>
+      <p id="empty-wake" class="empty hidden">No <code>.onnx</code> wake models in the volume.</p>
+    </section>
+
+    <section class="panel card panel-full" aria-labelledby="log-title">
+      <div class="row">
+        <h2 id="log-title" class="panel-title" style="margin:0">Wake service log</h2>
+        <div class="log-actions">
+          <label class="toggle">
+            <input type="checkbox" id="log-pause" />
+            <span>Pause</span>
+          </label>
+          <button type="button" id="log-clear" class="btn">Clear view</button>
+        </div>
+      </div>
+      <p class="path" id="log-path"></p>
+      <div id="log-stream" class="log-box" aria-live="polite"></div>
     </section>
   </main>
 
   <script>
-    const rows = document.getElementById('rows');
-    const empty = document.getElementById('empty');
-    const msg = document.getElementById('msg');
+    const rowsPiper = document.getElementById('rows-piper');
+    const emptyPiper = document.getElementById('empty-piper');
+    const msgPiper = document.getElementById('msg-piper');
     const modelsDir = document.getElementById('models-dir');
+
+    const rowsWake = document.getElementById('rows-wake');
+    const emptyWake = document.getElementById('empty-wake');
+    const msgWake = document.getElementById('msg-wake');
+    const wakeModelsDir = document.getElementById('wake-models-dir');
+
+    const logBox = document.getElementById('log-stream');
+    const logPathEl = document.getElementById('log-path');
+    const logPause = document.getElementById('log-pause');
+    let es = null;
+    const MAX_LOG_LINES = 800;
 
     function fmtBytes(n) {
       if (n < 1024) return n + ' B';
@@ -67,42 +128,13 @@
       return (n / (1024 * 1024)).toFixed(1) + ' MB';
     }
 
-    function setMsg(text, kind) {
-      msg.textContent = text || '';
-      msg.className = 'msg' + (kind ? ' ' + kind : '');
+    function setMsgPiper(text, kind) {
+      msgPiper.textContent = text || '';
+      msgPiper.className = 'msg' + (kind ? ' ' + kind : '');
     }
-
-    async function load() {
-      setMsg('');
-      const r = await fetch('/api/models');
-      if (!r.ok) {
-        setMsg('Failed to load models', 'err');
-        return;
-      }
-      const data = await r.json();
-      modelsDir.textContent = data.models_dir || '';
-      const list = data.models || [];
-      rows.innerHTML = '';
-      if (!list.length) {
-        empty.classList.remove('hidden');
-        return;
-      }
-      empty.classList.add('hidden');
-      for (const m of list) {
-        const tr = document.createElement('tr');
-        const total = (m.onnx_bytes || 0) + (m.json_bytes || 0);
-        tr.innerHTML = `
-          <td><span class="pill">${escapeHtml(m.short_name)}</span></td>
-          <td class="mono small">${escapeHtml(m.onnx)}<br/>${escapeHtml(m.json)}</td>
-          <td>${fmtBytes(total)}</td>
-          <td class="small">${escapeHtml((m.modified || '').replace('T', ' ').replace('+00:00', ''))}</td>
-          <td><button type="button" class="btn danger btn-del" data-id="${escapeAttr(m.id)}">Remove</button></td>
-        `;
-        rows.appendChild(tr);
-      }
-      rows.querySelectorAll('.btn-del').forEach((btn) => {
-        btn.addEventListener('click', () => remove(btn.getAttribute('data-id')));
-      });
+    function setMsgWake(text, kind) {
+      msgWake.textContent = text || '';
+      msgWake.className = 'msg' + (kind ? ' ' + kind : '');
     }
 
     function escapeHtml(s) {
@@ -116,39 +148,187 @@
       return escapeHtml(s).replace(/'/g, '&#39;');
     }
 
-    async function remove(id) {
-      if (!id || !confirm('Remove this voice from disk?')) return;
-      setMsg('Removing…');
+    async function loadPiper() {
+      setMsgPiper('');
+      const r = await fetch('/api/models');
+      if (!r.ok) {
+        setMsgPiper('Failed to load Piper models', 'err');
+        return;
+      }
+      const data = await r.json();
+      modelsDir.textContent = data.models_dir || '';
+      const list = data.models || [];
+      rowsPiper.innerHTML = '';
+      if (!list.length) {
+        emptyPiper.classList.remove('hidden');
+        return;
+      }
+      emptyPiper.classList.add('hidden');
+      for (const m of list) {
+        const tr = document.createElement('tr');
+        const total = (m.onnx_bytes || 0) + (m.json_bytes || 0);
+        tr.innerHTML = `
+          <td><span class="pill">${escapeHtml(m.short_name)}</span></td>
+          <td class="mono small">${escapeHtml(m.onnx)}<br/>${escapeHtml(m.json)}</td>
+          <td>${fmtBytes(total)}</td>
+          <td class="small">${escapeHtml((m.modified || '').replace('T', ' ').replace('+00:00', ''))}</td>
+          <td><button type="button" class="btn danger btn-del-piper" data-id="${escapeAttr(m.id)}">Remove</button></td>
+        `;
+        rowsPiper.appendChild(tr);
+      }
+      rowsPiper.querySelectorAll('.btn-del-piper').forEach((btn) => {
+        btn.addEventListener('click', () => removePiper(btn.getAttribute('data-id')));
+      });
+    }
+
+    async function removePiper(id) {
+      if (!id || !confirm('Remove this Piper voice from disk?')) return;
+      setMsgPiper('Removing…');
       const r = await fetch('/api/models/' + encodeURIComponent(id), { method: 'DELETE' });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) {
-        setMsg(j.detail || 'Delete failed', 'err');
+        setMsgPiper(j.detail || 'Delete failed', 'err');
         return;
       }
-      setMsg('Removed ' + id, 'ok');
-      await load();
+      setMsgPiper('Removed ' + id, 'ok');
+      await loadPiper();
     }
 
-    document.getElementById('refresh').addEventListener('click', load);
+    async function loadWake() {
+      setMsgWake('');
+      const r = await fetch('/api/wake-models');
+      if (!r.ok) {
+        setMsgWake('Failed to load wake models', 'err');
+        return;
+      }
+      const data = await r.json();
+      wakeModelsDir.textContent = data.models_dir || '';
+      const list = data.models || [];
+      rowsWake.innerHTML = '';
+      if (!list.length) {
+        emptyWake.classList.remove('hidden');
+        return;
+      }
+      emptyWake.classList.add('hidden');
+      for (const m of list) {
+        const tr = document.createElement('tr');
+        const prot = m.protected ? ' <span class="pill muted">core</span>' : '';
+        const delBtn = m.protected
+          ? ''
+          : `<button type="button" class="btn danger btn-del-wake" data-id="${escapeAttr(m.id)}">Remove</button>`;
+        tr.innerHTML = `
+          <td><span class="pill">${escapeHtml(m.phrase_hint)}</span>${prot}</td>
+          <td class="mono small">${escapeHtml(m.file)}</td>
+          <td>${fmtBytes(m.bytes || 0)}</td>
+          <td class="small">${escapeHtml((m.modified || '').replace('T', ' ').replace('+00:00', ''))}</td>
+          <td>${delBtn}</td>
+        `;
+        rowsWake.appendChild(tr);
+      }
+      rowsWake.querySelectorAll('.btn-del-wake').forEach((btn) => {
+        btn.addEventListener('click', () => removeWake(btn.getAttribute('data-id')));
+      });
+    }
+
+    async function removeWake(id) {
+      if (!id || !confirm('Remove this wake ONNX from disk? Restart mara-wakeword after.')) return;
+      setMsgWake('Removing…');
+      const r = await fetch('/api/wake-models/' + encodeURIComponent(id), { method: 'DELETE' });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setMsgWake(typeof j.detail === 'string' ? j.detail : 'Delete failed', 'err');
+        return;
+      }
+      setMsgWake('Removed ' + id, 'ok');
+      await loadWake();
+    }
+
+    function appendLogLine(line) {
+      if (logPause.checked) return;
+      const lineEl = document.createElement('div');
+      lineEl.className = 'log-line';
+      lineEl.textContent = line;
+      logBox.appendChild(lineEl);
+      while (logBox.childElementCount > MAX_LOG_LINES) {
+        logBox.removeChild(logBox.firstChild);
+      }
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function startLogStream() {
+      if (es) {
+        es.close();
+        es = null;
+      }
+      es = new EventSource('/api/logs/stream');
+      es.onmessage = (e) => {
+        try {
+          const o = JSON.parse(e.data);
+          if (o && typeof o.line === 'string') appendLogLine(o.line);
+        } catch (_) {
+          appendLogLine(e.data);
+        }
+      };
+      es.onerror = () => {
+        /* browser auto-reconnects EventSource */
+      };
+    }
+
+    async function loadHealth() {
+      try {
+        const r = await fetch('/health');
+        const h = await r.json();
+        logPathEl.textContent = (h.wake_log_file || '') + (h.wake_log_exists ? '' : ' (file not created yet)');
+      } catch (_) {
+        logPathEl.textContent = '';
+      }
+    }
+
+    document.getElementById('refresh-piper').addEventListener('click', loadPiper);
+    document.getElementById('refresh-wake').addEventListener('click', loadWake);
 
     document.getElementById('upload-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
-      setMsg('Uploading…');
+      setMsgPiper('Uploading…');
       const r = await fetch('/api/models/upload', { method: 'POST', body: fd });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) {
         const d = j.detail;
         const text = Array.isArray(d) ? d.map((x) => x.msg || x).join(' ') : (d || 'Upload failed');
-        setMsg(text, 'err');
+        setMsgPiper(text, 'err');
         return;
       }
-      setMsg('Uploaded ' + (j.id || '') + '. TTS will pick it up on the next describe/synthesize.', 'ok');
+      setMsgPiper('Uploaded ' + (j.id || '') + '.', 'ok');
       e.target.reset();
-      await load();
+      await loadPiper();
     });
 
-    load();
+    document.getElementById('wake-upload-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      setMsgWake('Uploading…');
+      const r = await fetch('/api/wake-models/upload', { method: 'POST', body: fd });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const d = j.detail;
+        const text = Array.isArray(d) ? d.map((x) => x.msg || x).join(' ') : (d || 'Upload failed');
+        setMsgWake(text, 'err');
+        return;
+      }
+      setMsgWake('Uploaded ' + (j.id || '') + '. Restart mara-wakeword to load.', 'ok');
+      e.target.reset();
+      await loadWake();
+    });
+
+    document.getElementById('log-clear').addEventListener('click', () => {
+      logBox.innerHTML = '';
+    });
+
+    loadPiper();
+    loadWake();
+    loadHealth();
+    startLogStream();
   </script>
 </body>
 </html>

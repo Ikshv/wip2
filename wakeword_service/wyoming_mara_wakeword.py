@@ -951,6 +951,50 @@ async def main():
                 pass  # Ignore errors during shutdown
 
 
+def _mirror_prints_to_log_file() -> None:
+    """Duplicate stdout/stderr to WAKE_LOG_FILE for the Piper UI log tail (shared volume)."""
+    path = os.environ.get("WAKE_LOG_FILE", "").strip()
+    if not path:
+        return
+    from pathlib import Path
+
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    log_f = open(p, "a", encoding="utf-8", buffering=1)
+    o_out = sys.__stdout__
+    o_err = sys.__stderr__
+
+    class _Tee:
+        __slots__ = ("_a", "_b")
+
+        def __init__(self, a, b):
+            self._a, self._b = a, b
+
+        def write(self, s):
+            self._a.write(s)
+            self._a.flush()
+            try:
+                self._b.write(s)
+                self._b.flush()
+            except Exception:
+                pass
+            return len(s)
+
+        def flush(self):
+            self._a.flush()
+            try:
+                self._b.flush()
+            except Exception:
+                pass
+
+        def __getattr__(self, name):
+            return getattr(self._a, name)
+
+    sys.stdout = _Tee(o_out, log_f)
+    sys.stderr = _Tee(o_err, log_f)
+
+
 if __name__ == "__main__":
+    _mirror_prints_to_log_file()
     asyncio.run(main())
 

@@ -1,0 +1,4 @@
+# Local Mac/Linux mic → Wyoming wake server (optional; not needed in Docker)
+wyoming>=1.0.0
+numpy>=1.20.0
+sounddevice>=0.4.6

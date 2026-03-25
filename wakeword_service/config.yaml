@@ -14,7 +14,8 @@ detection:
   # Lower = more sensitive (more false positives)
   # Higher = less sensitive (may miss detections)
   # Recommended: 0.3 - 0.5 for custom models
-  threshold: 0.3
+  # Custom ONNX models are often easier to trigger around 0.15–0.35; tune for your mic.
+  threshold: 0.2
   
   # Cooldown between detections in seconds
   # Prevents multiple triggers for the same utterance

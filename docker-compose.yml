@@ -31,8 +31,21 @@ services:
     environment:
       WAKE_MODELS_DIR: /data/wakeword_models
       WAKE_WORDS: ${WAKE_WORDS:-patrick}
-      # Docker image uses faster-whisper (no tflite); use openwakeword on host if needed
-      WAKE_DETECTION_METHOD: ${WAKE_DETECTION_METHOD:-whisper}
+      # Default: openWakeWord ONNX (patrick.onnx + bundled melspec/embedding). Set whisper to fall back.
+      WAKE_DETECTION_METHOD: ${WAKE_DETECTION_METHOD:-openwakeword}
+      # Lower = easier to trigger (more false positives). Try 0.15–0.25 for custom models.
+      WAKE_THRESHOLD: ${WAKE_THRESHOLD:-0.2}
+      # After a hit, scores must fall below this before another (default ~max(0.08, 0.35×threshold)).
+      # WAKE_REARM_MAX_SCORE: "0.1"
+      WHISPER_MODEL: ${WHISPER_MODEL:-base.en}
+      # Set to 1 to log Whisper text every detection pass (noisy)
+      WAKE_DEBUG_WHISPER: ${WAKE_DEBUG_WHISPER:-0}
+      # Set to 1 to log openWakeWord scores (see if patrick rises when you speak)
+      WAKE_DEBUG_OWW: ${WAKE_DEBUG_OWW:-0}
+      # mDNS A records: advertise this IP so Wyoming discovery points at a routable host (Tailscale).
+      # Override in .env if your IP changes. Use LAN IP instead if HA is only on local Wi‑Fi.
+      WYOMING_ZEROCONF_IPS: ${WYOMING_ZEROCONF_IPS:-100.112.105.113}
+      # WYOMING_ZEROCONF_NAME: "Mara Wake Word"
     restart: unless-stopped
 
   piper-ui:
